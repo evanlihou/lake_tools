@@ -1,5 +1,5 @@
 [package]
-name = "lakeTool"
+name = "lake_tool"
 version = "0.1.0"
 authors = ["Evan Lihou <e@evandoes.dev>"]
 edition = "2018"
@@ -7,3 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+config = "0.11"
+serde_derive = "^1.0.8"
+serde = "^1.0.8"
+lazy_static = "^1.4.0"
+rusqlite = { version = "^0.24.2", features = ["time"] }
+time = "^0.2.26"
+ctrlc = "3.1.8"

@@ -1,0 +1,9 @@
+{
+    "data_collection": {
+        "samples_per_collection": 5,
+        "calibration_microsec": 1.0,
+        "simulate_sensor": true,
+        "millisec_between_readings": 100,
+        "db_filename": "db.sqlite"
+    }
+}
