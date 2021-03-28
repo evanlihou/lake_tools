@@ -1,12 +1,13 @@
-use crate::settings::{Settings, DataCollectionSettings};
 use std::thread;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::time::{Duration};
 use time::OffsetDateTime;
 use std::vec::Vec;
 use rusqlite::{params, Connection, Result};
+use crate::settings::{Settings, DataCollectionSettings};
 use crate::ThreadMessage;
 
+/// The errors that can be returned by data collection
 #[derive(Debug)]
 pub enum DataCollectionError {
     /// The thread encountered a failure error that would have otherwise caused a panic
@@ -15,6 +16,12 @@ pub enum DataCollectionError {
     DatabaseError(rusqlite::Error),
 }
 
+/// The main handler for data collection, started in main.rs
+/// 
+/// # Arguments
+/// 
+/// * `mpsc_receiver` - An MPSC Receiver which can receive messages (non-blocking) to handle
+///   signals from the main process or other threads.
 pub fn run_data_collection(mpsc_receiver: Receiver<ThreadMessage>) -> Result<(), DataCollectionError> {
     let settings = Settings::new().map_err(|e| DataCollectionError::FatalError(e.to_string()))?.data_collection;
 
@@ -27,7 +34,7 @@ pub fn run_data_collection(mpsc_receiver: Receiver<ThreadMessage>) -> Result<(),
         timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
         reading REAL NOT NULL);", params![]).map_err(|e| DataCollectionError::DatabaseError(e))?;
 
-    // Create a simple streaming channel
+    // Create a simple streaming channel to act as a queue for storing a reading to the database
     let (tx, rx) = channel();
 
     // Make another thread to handle the queue and handle each reading
@@ -42,19 +49,14 @@ pub fn run_data_collection(mpsc_receiver: Receiver<ThreadMessage>) -> Result<(),
         }
     });
 
-    let mut iters: u16 = 100;
     loop {
+        // Take a collection
         match take_collection(&settings) {
             Err(e) => return Err(e),
             Ok(reading) => tx.send((reading, Some(OffsetDateTime::now_utc()))).map_err(|e| DataCollectionError::FatalError(e.to_string()))?
         }
 
-        iters -= 1;
-        if iters <= 0 { 
-            tx.send((f64::MAX, None)).expect("Done command to DB write queue failed.");
-            break;
-        }
-
+        // Check whether we have any messages to handle from outside of this thread
         match mpsc_receiver.try_recv() {
             Ok(message) => match message {
                 ThreadMessage::Terminate => {
@@ -64,19 +66,29 @@ pub fn run_data_collection(mpsc_receiver: Receiver<ThreadMessage>) -> Result<(),
                 }
             },
             Err(error) => match error {
+                // If no messages, just keep going
                 TryRecvError::Empty => (),
+                // This probably means the main thread unexpectedly died
                 TryRecvError::Disconnected => {
-                    eprintln!("[ERR] Data Collection Thread Message sender went away")
+                    tx.send((f64::MAX, None)).expect("Done command to DB write queue failed.");
+                    eprintln!("[ERR] Data Collection Thread Message sender from main process went away");
+                    break;
                 }
             }
         }
         
+        // TODO: we might want to run every `x` millis instead of sleeping because it doesn't run exactly every `x` millis right now
         thread::sleep(Duration::from_millis(settings.millisec_between_readings));
     }
 
     Ok(())
 }
 
+/// Take a collection of the data (`samples_per_collection` samples) and return the average value of the samples
+/// 
+/// # Arguments
+/// 
+/// * `settings` - A reference to the data collection settings to use to take this collection
 fn take_collection(settings: &DataCollectionSettings) -> Result<f64, DataCollectionError> {
     let num_samples = settings.samples_per_collection;
     let simulate_sensor = settings.simulate_sensor;
@@ -88,6 +100,7 @@ fn take_collection(settings: &DataCollectionSettings) -> Result<f64, DataCollect
     
     for _ in 0..num_samples {
         // Take sample
+        // TODO: Chosen by random dice roll. Maybe add dynamic values instead
         sample_results.push(4.07);
     }
 

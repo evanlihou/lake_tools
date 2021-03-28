@@ -1,7 +1,11 @@
+#![warn(missing_docs)]
+
+//! This crate provides a system to take readings from an ultrasonic sensor to measure depth of a body
+//! of water.
+
 extern crate config;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
 extern crate ctrlc;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -43,6 +47,8 @@ fn main() {
 
 }
 
+/// Messages that can be sent to a thread
 pub enum ThreadMessage {
+    /// Terminate the current thread gracefully
     Terminate
 }
